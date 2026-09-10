@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Imo Caller</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #0b141a; color: #fff; text-align: center; margin: 0; padding: 20px; }
+    .card { background: #111b21; border-radius: 12px; padding: 20px; max-width: 400px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    h2 { color: #00a884; margin-top: 0; }
+    input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #333; background: #202c33; color: #fff; font-size: 16px; }
+    button { width: 95%; padding: 12px; margin: 6px 0; border-radius: 8px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .btn-call { background: #00a884; color: #fff; }
+    .btn-leave { background: #ea4335; color: #fff; display: none; }
+    .video-container { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+    .video-box { width: 100%; height: 200px; background: #000; border-radius: 8px; overflow: hidden; position: relative; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>📞 Imo Call Test</h2>
+    <input type="text" id="channel" placeholder="রুমের নাম (যেমন: room1)">
+    <button id="joinBtn" class="btn-call" onclick="startCall()">কল শুরু করুন</button>
+    <button id="leaveBtn" class="btn-leave" onclick="leaveCall()">কল কাটুন</button>
+
+    <div class="video-container">
+      <div id="local-video" class="video-box"></div>
+      <div id="remote-video" class="video-box"></div>
+    </div>
+  </div>
+
+  <script>
+    const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    let localTracks = [];
+
+    async function startCall() {
+      const channel = document.getElementById("channel").value.trim() || "test";
+      document.getElementById("joinBtn").innerText = "কানেক্ট হচ্ছে...";
+
+      try {
+        // Vercel API থেকে টোকেন সংগ্রহ
+        const res = await fetch(`/api/token?channel=${channel}`);
+        const data = await res.json();
+
+        // কল রুমে যুক্ত হওয়া (আপনার Agora App ID)
+        await client.join("1e7db383cbff4a53a9bffa0fe3105b4", channel, data.token, null);
+
+        // ক্যামেরা ও মাইক্রোফোন চালু
+        localTracks = await AgoraRTC.createMicrophoneAndCameraTracks();
+        localTracks[1].play("local-video");
+        await client.publish(localTracks);
+
+        document.getElementById("joinBtn").style.display = "none";
+        document.getElementById("leaveBtn").style.display = "block";
+      } catch (err) {
+        alert("ভুল হয়েছে: " + err.message);
+        document.getElementById("joinBtn").innerText = "কল শুরু করুন";
+      }
+    }
+
+    client.on("user-published", async (user, mediaType) => {
+      await client.subscribe(user, mediaType);
+      if (mediaType === "video") {
+        user.videoTrack.play("remote-video");
+      }
+      if (mediaType === "audio") {
+        user.audioTrack.play();
+      }
+    });
+
+    async function leaveCall() {
+      for (let track of localTracks) {
+        track.stop();
+        track.close();
+      }
+      await client.leave();
+      document.getElementById("joinBtn").style.display = "block";
+      document.getElementById("joinBtn").innerText = "কল শুরু করুন";
+      document.getElementById("leaveBtn").style.display = "none";
+    }
+  </script>
+</body>
+</html>
